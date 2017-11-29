@@ -22,13 +22,13 @@ namespace SimpleMvc.Controllers
     {
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly SignInManager<ApplicationUser> _signInManager;
-        private readonly IEmailSender _emailSender;
+        private readonly IEmailService _emailSender;
         private readonly ILogger _logger;
 
         public AccountController(
             UserManager<ApplicationUser> userManager,
             SignInManager<ApplicationUser> signInManager,
-            IEmailSender emailSender,
+            IEmailService emailSender,
             ILogger<AccountController> logger)
         {
             _userManager = userManager;
@@ -59,6 +59,14 @@ namespace SimpleMvc.Controllers
             ViewData["ReturnUrl"] = returnUrl;
             if (ModelState.IsValid)
             {
+                var user = await _userManager.FindByNameAsync(model.Email);
+                if (user?.IsDeleted == true)
+                {
+                    ModelState.AddModelError(string.Empty, "That user has been deleted, please contact your administrator.");
+                    _logger.LogWarning($"Invalid login attempt, user account deleted. {model.Email}");
+                    return View(model);
+                }
+
                 // This doesn't count login failures towards account lockout
                 // To enable password failures to trigger account lockout, set lockoutOnFailure: true
                 var result = await _signInManager.PasswordSignInAsync(model.Email, model.Password, model.RememberMe, lockoutOnFailure: false);
@@ -119,6 +127,13 @@ namespace SimpleMvc.Controllers
             if (user == null)
             {
                 throw new ApplicationException($"Unable to load user with ID '{_userManager.GetUserId(User)}'.");
+            }
+
+            if (user.IsDeleted)
+            {
+                ModelState.AddModelError(string.Empty, "That user has been deleted, please contact your administrator.");
+                _logger.LogWarning($"Invalid 2fa login attempt, user account deleted. {user.UserName}");
+                return View();
             }
 
             var authenticatorCode = model.TwoFactorCode.Replace(" ", string.Empty).Replace("-", string.Empty);
@@ -371,7 +386,7 @@ namespace SimpleMvc.Controllers
                 // visit https://go.microsoft.com/fwlink/?LinkID=532713
                 var code = await _userManager.GeneratePasswordResetTokenAsync(user);
                 var callbackUrl = Url.ResetPasswordCallbackLink(user.Id, code, Request.Scheme);
-                await _emailSender.SendEmailAsync(model.Email, "Reset Password",
+                await _emailSender.SendAsync(model.Email, "Reset Password",
                    $"Please reset your password by clicking here: <a href='{callbackUrl}'>link</a>");
                 return RedirectToAction(nameof(ForgotPasswordConfirmation));
             }

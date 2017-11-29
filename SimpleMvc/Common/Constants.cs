@@ -12,7 +12,6 @@ namespace SimpleMvc.Common
             public const string SuperAdministrator = "Super Administrator";
             public const string Administrator = "Administrator";
             public const string Editor = "Editor";
-            public const string User = "Registered User";
         }
     }
 }
