@@ -14,5 +14,20 @@ namespace SimpleMvc.Config
         public string SenderEmail { get; set; }
         public string Account { get; set; }
         public string Password { get; set; }
+        public string SystemEmailSubjectPrefix { get; set; }
+        public string SystemEmailTo { get; set; }
+        public string SystemEmailCc { get; set; }
+
+        public List<string> SystemEmailCcList
+        {
+            get
+            {
+                return SystemEmailCc
+                   .Split(new Char[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
+                   .Where(x => !string.IsNullOrWhiteSpace(x))
+                   .Select(s => s.Trim())
+                   .ToList();
+            }
+        }
     }
 }

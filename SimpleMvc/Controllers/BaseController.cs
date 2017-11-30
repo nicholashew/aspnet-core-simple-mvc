@@ -18,6 +18,11 @@ namespace SimpleMvc.Controllers
             return userManager.GetUserAsync(HttpContext.User);
         }
 
+        public void AddModelError(string key, string errorMessage)
+        {
+            ModelState.AddModelError(key, errorMessage);
+        }
+
         public void AddIdentityErrors(IdentityResult result)
         {
             foreach (var error in result.Errors)

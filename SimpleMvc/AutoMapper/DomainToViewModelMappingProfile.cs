@@ -1,6 +1,7 @@
 ﻿using AutoMapper;
 using SimpleMvc.Models;
 using SimpleMvc.ViewModels;
+using SimpleMvc.ViewModels.User;
 
 namespace SimpleMvc.Mappings
 {
@@ -8,7 +9,7 @@ namespace SimpleMvc.Mappings
     {
         public DomainToViewModelMappingProfile()
         {
-            CreateMap<ApplicationUser, Models.UserViewModels.EditViewModel>();
+            CreateMap<ApplicationUser, UserEditViewModel>();
 
             //CreateMap<Building, BuildingViewModel>();
 

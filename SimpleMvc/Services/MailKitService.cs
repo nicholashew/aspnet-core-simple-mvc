@@ -84,5 +84,18 @@ namespace SimpleMvc.Services
                 return false;
             }
         }
+
+        public async Task<bool> SendSystemEmailAsync(string subject, string message, bool includeCc)
+        {
+            List<string> ccList = includeCc ? _settings.SystemEmailCcList : null;
+
+            string _subject = _settings.SystemEmailSubjectPrefix;
+            if (!string.IsNullOrWhiteSpace(subject))
+            {
+                _subject += " - " + subject;
+            }
+            
+            return await SendAsync(_settings.SystemEmailTo, ccList, null, subject, message);
+        }
     }
 }

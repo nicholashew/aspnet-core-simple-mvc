@@ -61,14 +61,28 @@ namespace SimpleMvc.Models
 
         [DataType(DataType.Date)]
         [DisplayFormat(DataFormatString = "{0:yyyy-MM-dd}")]
+        [Display(Name = "Last Deleted Date")]
+        public DateTime? LastDeletedDate { get; set; }
+
+        [DataType(DataType.Date)]
+        [DisplayFormat(DataFormatString = "{0:yyyy-MM-dd}")]
+        [Display(Name = "Last Restored Date")]
+        public DateTime? LastRestoredDate { get; set; }
+
+        [DataType(DataType.Date)]
+        [DisplayFormat(DataFormatString = "{0:yyyy-MM-dd}")]
         [Display(Name = "Created Date")]
         public DateTime CreatedDate { get; set; }
-        
+
+        public int? CreatedBy { get; set; }
+
         [DataType(DataType.Date)]
         [DisplayFormat(DataFormatString = "{0:yyyy-MM-dd}")]
         [Display(Name = "Modified Date")]
         public DateTime? ModifiedDate { get; set; }
-        
+
+        public int? ModifiedBy { get; set; }
+
         [Display(Name = "Full Name")]
         public string FullName
         {

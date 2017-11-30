@@ -1,4 +1,4 @@
-﻿@using SimpleMvc.Models.UserViewModels
+﻿@using SimpleMvc.ViewModels.User
 
 @model AssignedRoleViewModel
 
@@ -22,11 +22,11 @@
         <label class="control-label col-md-2">Roles</label>
         <div class="col-md-10">
             @{
-                List<AssignedRoleData> roles = ViewBag.Roles;
+                List<UserRoleDataViewModel> roles = ViewBag.Roles;
                 foreach (var role in roles)
                 {
                 <div class="checkbox">
-                    <label><input type="checkbox" name="selectedRoles" value="@role.RoleId" @(Html.Raw(role.Assigned ? "checked=\"checked\"" : "")) @(Html.Raw(role.CanToggle ? "" : "disabled"))/>@role.RoleName</label>
+                    <label><input type="checkbox" name="selectedRoles" value="@role.Id" @(Html.Raw(role.Check ? "checked=\"checked\"" : "")) @(Html.Raw(role.Disabled ? "" : "disabled"))/>@role.Name</label>
                 </div>
                 }
             }

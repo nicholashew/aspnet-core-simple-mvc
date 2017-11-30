@@ -49,9 +49,10 @@ namespace SimpleMvc
             // Register the IConfiguration instance
             services.AddSingleton(Configuration);
 
-            // Configure settings
+            // Configure settings            
+            services.Configure<SiteSettings>(Configuration.GetSection("SiteSettings"));
             services.Configure<EmailSettings>(Configuration.GetSection("EmailSettings"));
-            
+
             services.AddDbContext<ApplicationDbContext>(options =>
                 options.UseSqlServer(Configuration.GetConnectionString("DefaultConnection")));
 

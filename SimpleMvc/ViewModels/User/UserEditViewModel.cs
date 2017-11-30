@@ -5,9 +5,9 @@ using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace SimpleMvc.Models.UserViewModels
+namespace SimpleMvc.ViewModels.User
 {
-    public class EditViewModel
+    public class UserEditViewModel
     {
         public int Id { get; set; }
         

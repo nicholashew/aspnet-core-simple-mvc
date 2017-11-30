@@ -15,9 +15,10 @@ using SimpleMvc.Models.AccountViewModels;
 using SimpleMvc.Services;
 using SimpleMvc.Common;
 using Microsoft.EntityFrameworkCore;
-using SimpleMvc.Models.UserViewModels;
 using AutoMapper;
 using SimpleMvc.Data;
+using Microsoft.AspNetCore.Http;
+using SimpleMvc.ViewModels.User;
 
 namespace SimpleMvc.Controllers
 {
@@ -48,28 +49,70 @@ namespace SimpleMvc.Controllers
             return View(await _userManager.Users.ToListAsync());
         }
 
-        //// GET: User/Create
-        //public ActionResult Create()
-        //{
-        //    return View();
-        //}
+        // GET: User/Create
+        public async Task<IActionResult> Create()
+        {
+            await PopulateUserRoleDataAsync(null);
+            return View();
+        }
 
-        //// POST: User/Create
-        //[HttpPost]
-        //[ValidateAntiForgeryToken]
-        //public ActionResult Create(IFormCollection collection)
-        //{
-        //    try
-        //    {
-        //        // TODO: Add insert logic here
+        // POST: User/Create
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Create(UserCreateViewModel model)
+        {
+            if (ModelState.IsValid)
+            {
+                var user = await _userManager.FindByEmailAsync(model.Email);
 
-        //        return RedirectToAction(nameof(Index));
-        //    }
-        //    catch
-        //    {
-        //        return View();
-        //    }
-        //}
+                if (user == null)
+                {
+                    user = new ApplicationUser
+                    {
+                        UserName = model.Email,
+                        Email = model.Email,
+                        FirstName = model.FirstName,
+                        LastName = model.LastName,
+                        EmailConfirmed = !model.SendEmailVerification,
+                        CreatedDate = DateTime.UtcNow,
+                        CreatedBy = Convert.ToInt32(_userManager.GetUserId(User))
+                    };
+
+                    var result = await _userManager.CreateAsync(user, model.Password);
+                    if (result.Succeeded)
+                    {
+                        _logger.LogInformation($"Admin created a new account '{model.Email}' with password.");
+
+                        if (model.SelectedRoles.Any())
+                        {
+                            foreach (var roleId in model.SelectedRoles)
+                            {
+                                var role = await _roleManager.FindByIdAsync(roleId.ToString());
+                                await _userManager.AddToRoleAsync(user, role.Name);
+                            }
+                        }
+
+                        if (model.SendEmailVerification)
+                        {
+                            var code = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+                            var callbackUrl = Url.EmailConfirmationLink(user.Id, code, Request.Scheme);
+                            await _emailSender.SendEmailConfirmationAsync(model.Email, callbackUrl);
+                        }
+
+                        AddSuccessMessage("User create successfully." + user.Id);
+                        return RedirectToAction(nameof(Edit), new { id = user.Id });
+                    }
+                    AddIdentityErrors(result);
+                }
+                else
+                {
+                    ModelState.AddModelError("Email", "There's already a user with the provided email.");
+                }
+            }
+
+            await PopulateUserRoleDataAsync(model.SelectedRoles?.ToList());
+            return View(model);
+        }
 
         // GET: User/Edit/5
         public async Task<IActionResult> Edit(int? id)
@@ -81,8 +124,8 @@ namespace SimpleMvc.Controllers
                 return RedirectToAction(nameof(Index));
             }
 
-            var model = Mapper.Map<EditViewModel>(user);
-            await PopulateAssignedRoleDataAsync(user);
+            var model = Mapper.Map<UserEditViewModel>(user);
+            await PopulateAssignedRolesDataAsync(user);
 
             return View(model);
         }
@@ -90,7 +133,7 @@ namespace SimpleMvc.Controllers
         // POST: User/Edit/5
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(EditViewModel model)
+        public async Task<IActionResult> Edit(UserEditViewModel model)
         {
             var user = await _userManager.FindByIdAsync(model.Id.ToString());
             if (user == null)
@@ -128,6 +171,7 @@ namespace SimpleMvc.Controllers
                 user.PostalCode = model.PostalCode;
                 user.Country = model.Country;
                 user.ModifiedDate = DateTime.UtcNow;
+                user.ModifiedBy = Convert.ToInt32(_userManager.GetUserId(User));
 
                 var result = await _userManager.UpdateAsync(user);
                 if (result.Succeeded)
@@ -141,7 +185,7 @@ namespace SimpleMvc.Controllers
                 }
             }
 
-            await PopulateAssignedRoleDataAsync(user);
+            await PopulateAssignedRolesDataAsync(user);
 
             return View(model);
         }
@@ -161,8 +205,8 @@ namespace SimpleMvc.Controllers
                 Id = user.Id,
                 UserName = user.UserName
             };
-            await PopulateAssignedRoleDataAsync(user);
-
+                        
+            await PopulateUserRoleDataByUserAsync(user);
             return View(model);
         }
 
@@ -177,7 +221,7 @@ namespace SimpleMvc.Controllers
                 AddErrorMessage("No record found.");
                 return RedirectToAction(nameof(Index));
             }
-            
+
             if (!await CanManageUser(user))
             {
                 AddErrorMessage("Permission denied, you do not have permission to manage the user.");
@@ -241,7 +285,7 @@ namespace SimpleMvc.Controllers
             }
 
             var roles = await _userManager.GetRolesAsync(user);
-            var model = new DeleteUserViewModel
+            var model = new UserDeleteViewModel
             {
                 Id = user.Id,
                 UserName = user.UserName,
@@ -265,7 +309,7 @@ namespace SimpleMvc.Controllers
                     AddErrorMessage("No record found.");
                     return RedirectToAction(nameof(Index));
                 }
-                
+
                 if (!await CanManageUser(user))
                 {
                     AddErrorMessage("Permission denied, you do not have permission to manage the user.");
@@ -273,6 +317,8 @@ namespace SimpleMvc.Controllers
                 else
                 {
                     user.IsDeleted = true;
+                    user.LastDeletedDate = DateTime.UtcNow;
+
                     var result = await _userManager.UpdateAsync(user);
                     if (!result.Succeeded)
                     {
@@ -297,7 +343,7 @@ namespace SimpleMvc.Controllers
                 AddErrorMessage("No record found.");
                 return RedirectToAction(nameof(Index));
             }
-            
+
             if (!await CanManageUser(user))
             {
                 AddErrorMessage("Permission denied, you do not have permission to manage the user.");
@@ -323,7 +369,7 @@ namespace SimpleMvc.Controllers
                 AddErrorMessage("No record found.");
                 return RedirectToAction(nameof(Index));
             }
-            
+
             if (!await CanManageUser(user))
             {
                 AddErrorMessage("Permission denied, you do not have permission to manage the user.");
@@ -331,6 +377,8 @@ namespace SimpleMvc.Controllers
             else
             {
                 user.IsDeleted = false;
+                user.LastRestoredDate = DateTime.UtcNow;
+
                 var result = await _userManager.UpdateAsync(user);
                 if (!result.Succeeded)
                 {
@@ -352,15 +400,20 @@ namespace SimpleMvc.Controllers
         //}
 
         /// <summary>
-        /// Check current user is in Super Admin role. if false means is normal admin.
+        /// Gets a value indicating whether cureent user <see cref= "User" /> is Super Administrator
         /// </summary>
-        /// <returns></returns>
+        /// <returns>true, if current user in role of Super Administrator</returns>
         private async Task<bool> IsSuperUser()
         {
             var user = await _userManager.GetUserAsync(User);
             return await _userManager.IsInRoleAsync(user, Constants.Roles.SuperAdministrator);
         }
 
+        /// <summary>
+        /// Gets a value indicating whether cureent user can manage the specified user
+        /// </summary>
+        /// <param name="user"></param>
+        /// <returns>true, if has higher permission than the specified user</returns>
         private async Task<bool> CanManageUser(ApplicationUser user)
         {
             bool isCurrentSuper = await IsSuperUser();
@@ -374,22 +427,48 @@ namespace SimpleMvc.Controllers
 
             return true;
         }
-
-        private async Task PopulateAssignedRoleDataAsync(ApplicationUser user)
+        
+        /// <summary>
+        /// Gets the user roles.
+        /// </summary>
+        /// <param name="user"></param>
+        /// <returns>List of Role Id.</returns>
+        private async Task<List<int>> GetUserRoles(ApplicationUser user)
         {
             var allRoles = await _roleManager.Roles.ToListAsync();
             var userRoles = await _userManager.GetRolesAsync(user);
-            bool isSuperUser = await IsSuperUser();
 
-            var data = allRoles.Select(x => new AssignedRoleData
+            return allRoles
+                .Where(x => userRoles.Contains(x.Name))
+                .Select(x => x.Id)
+                .ToList();
+        }
+
+        private async Task PopulateUserRoleDataAsync(List<int> selectedRoles)
+        {
+            selectedRoles = selectedRoles ?? new List<int>();
+
+            var isSuperUser = await IsSuperUser();
+            var roles = await _roleManager.Roles.ToListAsync();
+
+            ViewBag.Roles = roles.Select(r => new UserRoleDataViewModel
             {
-                RoleId = x.Id,
-                RoleName = x.Name,
-                Assigned = userRoles.Contains(x.Name),
-                CanToggle = x.Name == Constants.Roles.SuperAdministrator && !isSuperUser ? false : true
-            });
+                Id = r.Id,
+                Name = r.Name,
+                Check = selectedRoles.Contains(r.Id),
+                Disabled = r.Name == Constants.Roles.SuperAdministrator && !isSuperUser ? true : false
+            }).ToList();
+        }
 
-            ViewBag.Roles = data.ToList();
+        private async Task PopulateUserRoleDataByUserAsync(ApplicationUser user)
+        {
+            var selectedRoles = await GetUserRoles(user);
+            await PopulateUserRoleDataAsync(selectedRoles);
+        }
+
+        private async Task PopulateAssignedRolesDataAsync(ApplicationUser user)
+        {
+            ViewBag.AssignedRoles = await _userManager.GetRolesAsync(user);
         }
 
         #endregion

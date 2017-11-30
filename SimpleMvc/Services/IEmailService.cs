@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using SimpleMvc.Config;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace SimpleMvc.Services
@@ -7,5 +8,6 @@ namespace SimpleMvc.Services
     {
         Task<bool> SendAsync(string mailTo, string subject, string message);
         Task<bool> SendAsync(string mailTo, List<string> mailCc, List<string> mailBcc, string subject, string message);
+        Task<bool> SendSystemEmailAsync(string subject, string message, bool includeCc);
     }
 }

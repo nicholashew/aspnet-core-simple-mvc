@@ -13,26 +13,31 @@ using Microsoft.Extensions.Options;
 using SimpleMvc.Models;
 using SimpleMvc.Models.AccountViewModels;
 using SimpleMvc.Services;
+using SimpleMvc.Config;
+using Newtonsoft.Json;
 
 namespace SimpleMvc.Controllers
 {
     [Authorize]
     [Route("[controller]/[action]")]
-    public class AccountController : Controller
+    public class AccountController : BaseController
     {
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly SignInManager<ApplicationUser> _signInManager;
+        private readonly SiteSettings _siteSettings;
         private readonly IEmailService _emailSender;
         private readonly ILogger _logger;
 
         public AccountController(
             UserManager<ApplicationUser> userManager,
             SignInManager<ApplicationUser> signInManager,
+            IOptions<SiteSettings> siteSettings,
             IEmailService emailSender,
             ILogger<AccountController> logger)
         {
             _userManager = userManager;
             _signInManager = signInManager;
+            _siteSettings = siteSettings.Value;
             _emailSender = emailSender;
             _logger = logger;
         }
@@ -233,9 +238,18 @@ namespace SimpleMvc.Controllers
         public async Task<IActionResult> Register(RegisterViewModel model, string returnUrl = null)
         {
             ViewData["ReturnUrl"] = returnUrl;
+
+            if (!_siteSettings.AllowPublicRegistration)
+            {
+                var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+                string message = $"Forbidden Public Registration Request from Remote IP address: {ipAddress}, {JsonConvert.SerializeObject(model)}";
+                await _emailSender.SendSystemEmailAsync(_logger, "Invalid Register Action", message, false);
+                return RedirectToLocal(returnUrl);
+            }
+
             if (ModelState.IsValid)
             {
-                var user = new ApplicationUser { UserName = model.Email, Email = model.Email };
+                var user = new ApplicationUser { UserName = model.Email, Email = model.Email, CreatedDate = DateTime.UtcNow };
                 var result = await _userManager.CreateAsync(user, model.Password);
                 if (result.Succeeded)
                 {

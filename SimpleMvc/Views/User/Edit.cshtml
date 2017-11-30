@@ -1,6 +1,6 @@
-﻿@using SimpleMvc.Models.UserViewModels
+﻿@using SimpleMvc.ViewModels.User
 
-@model EditViewModel
+@model UserEditViewModel
 
 @{
     ViewData["Title"] = "Edit User";
@@ -24,11 +24,10 @@
         <div class="col-md-10">
             <a class="btn btn-primary" asp-action="AssignRole" asp-route-id="@Model.Id">Assign Roles</a>
             @{
-                List<AssignedRoleData> roles = ViewBag.Roles;
-                var _roles = roles.Where(r => r.Assigned == true).Select(r => r.RoleName).ToArray();
-                if (_roles.Any())
+                List<string> roles = ViewBag.AssignedRoles;
+                if (roles.Any())
                 {
-                    <p style="margin-top:10px;">@string.Join(", ", _roles)</p>
+                    <p style="margin-top:10px;">@string.Join(", ", roles)</p>
                 }
             }
         </div>
