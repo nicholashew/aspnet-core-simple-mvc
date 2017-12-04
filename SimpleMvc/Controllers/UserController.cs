@@ -19,6 +19,7 @@ using AutoMapper;
 using SimpleMvc.Data;
 using Microsoft.AspNetCore.Http;
 using SimpleMvc.ViewModels.User;
+using SimpleMvc.Helper;
 
 namespace SimpleMvc.Controllers
 {
@@ -46,7 +47,16 @@ namespace SimpleMvc.Controllers
         // GET: User/Index
         public async Task<IActionResult> Index()
         {
-            return View(await _userManager.Users.ToListAsync());
+            var users = await _userManager.Users.ToListAsync();
+
+            if (!await IsSuperUser())
+            {
+                var superUsers = await _userManager.GetUsersInRoleAsync(Constants.Roles.SuperAdministrator);
+                var filterUserIds = superUsers.Select(x => x.Id);
+                users = users.Where(x => !filterUserIds.Contains(x.Id)).ToList();
+            }
+
+            return View(users);
         }
 
         // GET: User/Create
@@ -85,9 +95,15 @@ namespace SimpleMvc.Controllers
 
                         if (model.SelectedRoles.Any())
                         {
+                            var isSuperUser = !await IsSuperUser();
                             foreach (var roleId in model.SelectedRoles)
                             {
                                 var role = await _roleManager.FindByIdAsync(roleId.ToString());
+
+                                // Prevent super admin role injection by normal admin
+                                if (!isSuperUser && role.Name == Constants.Roles.SuperAdministrator)
+                                    continue;
+
                                 await _userManager.AddToRoleAsync(user, role.Name);
                             }
                         }
@@ -118,14 +134,15 @@ namespace SimpleMvc.Controllers
         public async Task<IActionResult> Edit(int? id)
         {
             var user = await _userManager.FindByIdAsync(id.ToString());
-            if (user == null)
+            if (user == null || !await CanManageUser(user))
             {
-                AddErrorMessage("No record found.");
+                AddErrorMessage("User not found or you do not have permission to manage the user.");
                 return RedirectToAction(nameof(Index));
             }
 
             var model = Mapper.Map<UserEditViewModel>(user);
             await PopulateAssignedRolesDataAsync(user);
+            PopulateCountriesDropDownList(user?.Country);
 
             return View(model);
         }
@@ -136,56 +153,58 @@ namespace SimpleMvc.Controllers
         public async Task<IActionResult> Edit(UserEditViewModel model)
         {
             var user = await _userManager.FindByIdAsync(model.Id.ToString());
-            if (user == null)
+            if (user == null || !await CanManageUser(user))
             {
-                AddErrorMessage("No record found.");
+                AddErrorMessage("User not found or you do not have permission to manage the user.");
                 return RedirectToAction(nameof(Index));
             }
 
             if (ModelState.IsValid)
             {
-                if (!await CanManageUser(user))
+                if (model.BirthDate >= DateTime.Today)
                 {
-                    AddErrorMessage("Permission denied, you do not have permission to manage the user.");
-                    return RedirectToAction(nameof(Edit), new { model.Id });
-                }
-
-                var email = user.Email;
-                if (model.Email != email)
-                {
-                    var setEmailResult = await _userManager.SetEmailAsync(user, model.Email);
-                    if (!setEmailResult.Succeeded)
-                    {
-                        AddErrorMessage("Failed to update user email.");
-                        _logger.LogError($"Unexpected error occurred setting email for user with ID '{user.Id}'.");
-                    }
-                }
-
-                user.FirstName = model.FirstName;
-                user.LastName = model.LastName;
-                user.BirthDate = model.BirthDate;
-                user.Address1 = model.Address1;
-                user.Address2 = model.Address2;
-                user.State = model.State;
-                user.City = model.City;
-                user.PostalCode = model.PostalCode;
-                user.Country = model.Country;
-                user.ModifiedDate = DateTime.UtcNow;
-                user.ModifiedBy = Convert.ToInt32(_userManager.GetUserId(User));
-
-                var result = await _userManager.UpdateAsync(user);
-                if (result.Succeeded)
-                {
-                    AddSuccessMessage("User profile has been updated", true);
-                    return RedirectToAction(nameof(Edit), new { model.Id });
+                    ModelState.AddModelError("BirthDate", "Birth Date can not be greater than today date.");
                 }
                 else
                 {
-                    AddIdentityErrors(result);
+                    var email = user.Email;
+                    if (model.Email != email)
+                    {
+                        var setEmailResult = await _userManager.SetEmailAsync(user, model.Email);
+                        if (!setEmailResult.Succeeded)
+                        {
+                            AddErrorMessage("Failed to update user email.");
+                            _logger.LogError($"Unexpected error occurred setting email for user with ID '{user.Id}'.");
+                        }
+                    }
+
+                    user.FirstName = model.FirstName;
+                    user.LastName = model.LastName;
+                    user.BirthDate = model.BirthDate;
+                    user.Address1 = model.Address1;
+                    user.Address2 = model.Address2;
+                    user.State = model.State;
+                    user.City = model.City;
+                    user.PostalCode = model.PostalCode;
+                    user.Country = model.Country;
+                    user.ModifiedDate = DateTime.UtcNow;
+                    user.ModifiedBy = Convert.ToInt32(_userManager.GetUserId(User));
+
+                    var result = await _userManager.UpdateAsync(user);
+                    if (result.Succeeded)
+                    {
+                        AddSuccessMessage("User profile has been updated", true);
+                        return RedirectToAction(nameof(Edit), new { model.Id });
+                    }
+                    else
+                    {
+                        AddIdentityErrors(result);
+                    }
                 }
             }
 
             await PopulateAssignedRolesDataAsync(user);
+            PopulateCountriesDropDownList(user.Country);
 
             return View(model);
         }
@@ -194,9 +213,9 @@ namespace SimpleMvc.Controllers
         public async Task<IActionResult> AssignRole(int? id)
         {
             var user = await _userManager.FindByIdAsync(id.ToString());
-            if (user == null)
+            if (user == null || !await CanManageUser(user))
             {
-                AddErrorMessage("No record found.");
+                AddErrorMessage("User not found or you do not have permission to manage the user.");
                 return RedirectToAction(nameof(Index));
             }
 
@@ -205,7 +224,7 @@ namespace SimpleMvc.Controllers
                 Id = user.Id,
                 UserName = user.UserName
             };
-                        
+
             await PopulateUserRoleDataByUserAsync(user);
             return View(model);
         }
@@ -216,16 +235,10 @@ namespace SimpleMvc.Controllers
         public async Task<IActionResult> AssignRole(int? id, string[] selectedRoles)
         {
             var user = await _userManager.FindByIdAsync(id.ToString());
-            if (user == null)
+            if (user == null || !await CanManageUser(user))
             {
-                AddErrorMessage("No record found.");
+                AddErrorMessage("User not found or you do not have permission to manage the user.");
                 return RedirectToAction(nameof(Index));
-            }
-
-            if (!await CanManageUser(user))
-            {
-                AddErrorMessage("Permission denied, you do not have permission to manage the user.");
-                return RedirectToAction(nameof(AssignRole), new { id });
             }
 
             bool isCurrentSuper = await IsSuperUser();
@@ -242,6 +255,7 @@ namespace SimpleMvc.Controllers
             {
                 foreach (var role in rolesToInsert.Distinct())
                 {
+                    // Prevent super admin role injection by normal admin
                     if (role.Name == Constants.Roles.SuperAdministrator && !isCurrentSuper)
                         continue;
 
@@ -255,9 +269,11 @@ namespace SimpleMvc.Controllers
                 {
                     if (role.Name == Constants.Roles.SuperAdministrator)
                     {
+                        // Prevent super admin role removed by normal admin, althought it already handled by CanManageUser checks
                         if (!isCurrentSuper)
                             continue;
 
+                        // Prevent all of super admin demoted
                         var superUsers = await _userManager.GetUsersInRoleAsync(Constants.Roles.SuperAdministrator);
                         if (superUsers.Count == 1)
                         {
@@ -278,9 +294,9 @@ namespace SimpleMvc.Controllers
         public async Task<ActionResult> Delete(int id)
         {
             var user = await _userManager.FindByIdAsync(id.ToString());
-            if (user == null)
+            if (user == null || !await CanManageUser(user))
             {
-                AddErrorMessage("No record found.");
+                AddErrorMessage("User not found or you do not have permission to manage the user.");
                 return RedirectToAction(nameof(Index));
             }
 
@@ -304,27 +320,21 @@ namespace SimpleMvc.Controllers
             try
             {
                 var user = await _userManager.FindByIdAsync(id.ToString());
-                if (user == null)
+                if (user == null || !await CanManageUser(user))
                 {
-                    AddErrorMessage("No record found.");
+                    AddErrorMessage("User not found or you do not have permission to manage the user.");
                     return RedirectToAction(nameof(Index));
                 }
 
-                if (!await CanManageUser(user))
-                {
-                    AddErrorMessage("Permission denied, you do not have permission to manage the user.");
-                }
-                else
-                {
-                    user.IsDeleted = true;
-                    user.LastDeletedDate = DateTime.UtcNow;
+                user.IsDeleted = true;
+                user.LastDeletedDate = DateTime.UtcNow;
 
-                    var result = await _userManager.UpdateAsync(user);
-                    if (!result.Succeeded)
-                    {
-                        AddErrorMessage("Failed to delete user.");
-                    }
+                var result = await _userManager.UpdateAsync(user);
+                if (!result.Succeeded)
+                {
+                    AddErrorMessage("Failed to delete user.");
                 }
+
                 return RedirectToAction(nameof(Index));
             }
             catch (Exception ex)
@@ -338,23 +348,16 @@ namespace SimpleMvc.Controllers
         public async Task<ActionResult> HardDelete(int id)
         {
             var user = await _userManager.FindByIdAsync(id.ToString());
-            if (user == null)
+            if (user == null || !await CanManageUser(user))
             {
-                AddErrorMessage("No record found.");
+                AddErrorMessage("User not found or you do not have permission to manage the user.");
                 return RedirectToAction(nameof(Index));
             }
 
-            if (!await CanManageUser(user))
+            var result = await _userManager.DeleteAsync(user);
+            if (!result.Succeeded)
             {
-                AddErrorMessage("Permission denied, you do not have permission to manage the user.");
-            }
-            else
-            {
-                var result = await _userManager.DeleteAsync(user);
-                if (!result.Succeeded)
-                {
-                    AddErrorMessage("Failed to permanent delete user.");
-                }
+                AddErrorMessage("Failed to permanent delete user.");
             }
 
             return RedirectToAction(nameof(Index));
@@ -364,41 +367,26 @@ namespace SimpleMvc.Controllers
         public async Task<ActionResult> Restore(int id)
         {
             var user = await _userManager.FindByIdAsync(id.ToString());
-            if (user == null)
+            if (user == null || !await CanManageUser(user))
             {
-                AddErrorMessage("No record found.");
+                AddErrorMessage("User not found or you do not have permission to manage the user.");
                 return RedirectToAction(nameof(Index));
             }
 
-            if (!await CanManageUser(user))
-            {
-                AddErrorMessage("Permission denied, you do not have permission to manage the user.");
-            }
-            else
-            {
-                user.IsDeleted = false;
-                user.LastRestoredDate = DateTime.UtcNow;
+            user.IsDeleted = false;
+            user.LastRestoredDate = DateTime.UtcNow;
 
-                var result = await _userManager.UpdateAsync(user);
-                if (!result.Succeeded)
-                {
-                    AddErrorMessage("Failed to restore user.");
-                }
+            var result = await _userManager.UpdateAsync(user);
+            if (!result.Succeeded)
+            {
+                AddErrorMessage("Failed to restore user.");
             }
 
             return RedirectToAction(nameof(Index));
         }
 
         #region Helpers
-
-        //private void PopulateDepartmentsDropDownList(object selectedDepartment = null)
-        //{
-        //    var departmentsQuery = from d in _context.Departments
-        //                           orderby d.Name
-        //                           select d;
-        //    ViewBag.DepartmentID = new SelectList(departmentsQuery.AsNoTracking(), "DepartmentID", "Name", selectedDepartment);
-        //}
-
+                
         /// <summary>
         /// Gets a value indicating whether cureent user <see cref= "User" /> is Super Administrator
         /// </summary>
@@ -418,16 +406,16 @@ namespace SimpleMvc.Controllers
         {
             bool isCurrentSuper = await IsSuperUser();
             bool isSuper = await _userManager.IsInRoleAsync(user, Constants.Roles.SuperAdministrator);
-            bool isAdmin = isSuper ? true : await _userManager.IsInRoleAsync(user, Constants.Roles.Administrator);
 
-            if (!isCurrentSuper && (isSuper || isAdmin))
-            {
-                return false;
-            }
+            if (isCurrentSuper)
+                return true;
 
-            return true;
+            if (!isCurrentSuper && !isSuper)
+                return true;
+
+            return false;
         }
-        
+
         /// <summary>
         /// Gets the user roles.
         /// </summary>
@@ -451,6 +439,11 @@ namespace SimpleMvc.Controllers
             var isSuperUser = await IsSuperUser();
             var roles = await _roleManager.Roles.ToListAsync();
 
+            if (!isSuperUser)
+            {
+                roles = roles.Where(r => r.Name != Constants.Roles.SuperAdministrator).ToList();
+            }
+
             ViewBag.Roles = roles.Select(r => new UserRoleDataViewModel
             {
                 Id = r.Id,
@@ -469,6 +462,16 @@ namespace SimpleMvc.Controllers
         private async Task PopulateAssignedRolesDataAsync(ApplicationUser user)
         {
             ViewBag.AssignedRoles = await _userManager.GetRolesAsync(user);
+        }
+
+        private void PopulateCountriesDropDownList(object selectedCountry = null)
+        {
+            var countries = CountryHelper.GetCountriesByIso3166().Select(x => new
+            {
+                code = x.TwoLetterISORegionName,
+                name = x.EnglishName
+            });
+            ViewBag.CountryList = new SelectList(countries, "code", "name", selectedCountry);
         }
 
         #endregion

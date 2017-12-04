@@ -25,9 +25,9 @@
                 List<UserRoleDataViewModel> roles = ViewBag.Roles;
                 foreach (var role in roles)
                 {
-                <div class="checkbox">
-                    <label><input type="checkbox" name="selectedRoles" value="@role.Id" @(Html.Raw(role.Check ? "checked=\"checked\"" : "")) @(Html.Raw(role.Disabled ? "" : "disabled"))/>@role.Name</label>
-                </div>
+                    <div class="checkbox">
+                        <label><input type="checkbox" name="selectedRoles" value="@role.Id" @(Html.Raw(role.Check ? "checked=\"checked\"" : "")) @(Html.Raw(!role.Disabled ? "" : "disabled")) />@role.Name</label>
+                    </div>
                 }
             }
         </div>
