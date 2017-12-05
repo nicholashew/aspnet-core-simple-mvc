@@ -1,6 +1,25 @@
-﻿body {
+﻿/* Sticky Footer Layout */
+html {
+    position: relative;
+    min-height: 100%;
+}
+
+body {
     padding-top: 50px;
     padding-bottom: 20px;
+    /* Margin bottom by footer height */
+    margin-bottom: 20px;
+}
+
+footer {
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+    /* Set the fixed height of the footer here */
+    height: 40px;
+    padding: 10px;
+    background-color: #2e2d2d;
+    color: #fff;
 }
 
 /* Wrapping element */
@@ -10,14 +29,30 @@
     padding-right: 15px;
 }
 
+.navbar-nav a.github-icon:before {
+    content: url(/images/GitHub-Mark-Light-32px.png);
+    width: 26px;
+    height: 25px;
+    background-image: url(/assets/images/github.svg);
+    display: inline-block;
+    vertical-align: middle;
+    position: relative;
+    top: -3px;
+}
+
 /* Carousel */
+.container-fluid > .carousel {
+    margin-left: -15px;
+    margin-right: -15px;
+}
+
 .carousel-caption p {
     font-size: 20px;
     line-height: 1.4;
 }
 
 /* Make .svg files in the carousel display properly in older browsers */
-.carousel-inner .item img[src$=".svg"] {
+.carousel-inner .item img {
     width: 100%;
 }
 
@@ -28,8 +63,24 @@
 
 /* Hide/rearrange for smaller screens */
 @media screen and (max-width: 767px) {
+    /* Hide navbar */
+    .navbar-scroll-custom {
+        transform: translateY(-52px);
+        transition-duration: 0.6s;
+    }
+
     /* Hide captions */
     .carousel-caption {
         display: none;
+    }
+}
+
+/* Hide/rearrange for larger screens */
+@media screen and (min-width: 768px) {
+    .carousel-caption {
+        right: 20%;
+        left: 20%;
+        top: 20%;
+        padding-bottom: 0;
     }
 }

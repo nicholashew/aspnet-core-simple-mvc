@@ -1,25 +1,18 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Security.Claims;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authorization;
+﻿using AutoMapper;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
-using SimpleMvc.Models;
-using SimpleMvc.Models.AccountViewModels;
-using SimpleMvc.Services;
-using SimpleMvc.Common;
 using Microsoft.EntityFrameworkCore;
-using AutoMapper;
-using SimpleMvc.Data;
-using Microsoft.AspNetCore.Http;
-using SimpleMvc.ViewModels.User;
+using Microsoft.Extensions.Logging;
+using SimpleMvc.Common;
 using SimpleMvc.Helper;
+using SimpleMvc.Models;
+using SimpleMvc.Services;
+using SimpleMvc.ViewModels.User;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace SimpleMvc.Controllers
 {
@@ -49,7 +42,7 @@ namespace SimpleMvc.Controllers
         {
             var users = await _userManager.Users.ToListAsync();
 
-            if (!await IsSuperUser())
+            if (!IsSuperUser())
             {
                 var superUsers = await _userManager.GetUsersInRoleAsync(Constants.Roles.SuperAdministrator);
                 var filterUserIds = superUsers.Select(x => x.Id);
@@ -91,11 +84,10 @@ namespace SimpleMvc.Controllers
                     var result = await _userManager.CreateAsync(user, model.Password);
                     if (result.Succeeded)
                     {
-                        _logger.LogInformation($"Admin created a new account '{model.Email}' with password.");
-
+                        string addedRoles = string.Empty;
                         if (model.SelectedRoles.Any())
                         {
-                            var isSuperUser = !await IsSuperUser();
+                            var isSuperUser = IsSuperUser();
                             foreach (var roleId in model.SelectedRoles)
                             {
                                 var role = await _roleManager.FindByIdAsync(roleId.ToString());
@@ -105,8 +97,11 @@ namespace SimpleMvc.Controllers
                                     continue;
 
                                 await _userManager.AddToRoleAsync(user, role.Name);
+                                addedRoles += role.Name + ",";
                             }
                         }
+
+                        _logger.LogInformation($"Admin created a new account '{model.Email}' with password and roles {addedRoles}.");
 
                         if (model.SendEmailVerification)
                         {
@@ -241,7 +236,7 @@ namespace SimpleMvc.Controllers
                 return RedirectToAction(nameof(Index));
             }
 
-            bool isCurrentSuper = await IsSuperUser();
+            bool isCurrentSuper = IsSuperUser();
             int[] selectedRoleIds = selectedRoles.Select(int.Parse).ToArray();
 
             var allRoles = await _roleManager.Roles.ToListAsync();
@@ -391,10 +386,9 @@ namespace SimpleMvc.Controllers
         /// Gets a value indicating whether cureent user <see cref= "User" /> is Super Administrator
         /// </summary>
         /// <returns>true, if current user in role of Super Administrator</returns>
-        private async Task<bool> IsSuperUser()
+        private bool IsSuperUser()
         {
-            var user = await _userManager.GetUserAsync(User);
-            return await _userManager.IsInRoleAsync(user, Constants.Roles.SuperAdministrator);
+            return User.IsInRole(Constants.Roles.SuperAdministrator);
         }
 
         /// <summary>
@@ -404,16 +398,12 @@ namespace SimpleMvc.Controllers
         /// <returns>true, if has higher permission than the specified user</returns>
         private async Task<bool> CanManageUser(ApplicationUser user)
         {
-            bool isCurrentSuper = await IsSuperUser();
-            bool isSuper = await _userManager.IsInRoleAsync(user, Constants.Roles.SuperAdministrator);
-
-            if (isCurrentSuper)
+            if (IsSuperUser())
                 return true;
-
-            if (!isCurrentSuper && !isSuper)
-                return true;
-
-            return false;
+            
+            bool isUserIsSuperUser = await _userManager.IsInRoleAsync(user, Constants.Roles.SuperAdministrator);
+            
+            return !isUserIsSuperUser;
         }
 
         /// <summary>
@@ -436,7 +426,7 @@ namespace SimpleMvc.Controllers
         {
             selectedRoles = selectedRoles ?? new List<int>();
 
-            var isSuperUser = await IsSuperUser();
+            var isSuperUser = IsSuperUser();
             var roles = await _roleManager.Roles.ToListAsync();
 
             if (!isSuperUser)
