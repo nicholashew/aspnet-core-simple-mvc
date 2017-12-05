@@ -22,7 +22,7 @@ namespace SimpleMvc.Controllers
     {
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly SignInManager<ApplicationUser> _signInManager;
-        private readonly IEmailSender _emailSender;
+        private readonly IEmailService _emailSender;
         private readonly ILogger _logger;
         private readonly UrlEncoder _urlEncoder;
 
@@ -31,7 +31,7 @@ namespace SimpleMvc.Controllers
         public ManageController(
           UserManager<ApplicationUser> userManager,
           SignInManager<ApplicationUser> signInManager,
-          IEmailSender emailSender,
+          IEmailService emailSender,
           ILogger<ManageController> logger,
           UrlEncoder urlEncoder)
         {

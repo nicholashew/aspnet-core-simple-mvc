@@ -1,9 +1,9 @@
-﻿@using System.Collections.Generic
+﻿@using Microsoft.Extensions.Options
 @using System.Linq
-@using Microsoft.AspNetCore.Http
-@using Microsoft.AspNetCore.Http.Authentication
+@using SimpleMvc.Config
 @model LoginViewModel
 @inject SignInManager<ApplicationUser> SignInManager
+@inject IOptions<SiteSettings> SiteSettings
 
 @{
     ViewData["Title"] = "Log in";
@@ -42,9 +42,12 @@
                     <p>
                         <a asp-action="ForgotPassword">Forgot your password?</a>
                     </p>
-                    <p>
-                        <a asp-action="Register" asp-route-returnurl="@ViewData["ReturnUrl"]">Register as a new user?</a>
-                    </p>
+                    @if (SiteSettings.Value?.AllowPublicRegistration == true)
+                    {
+                        <p>
+                            <a asp-action="Register" asp-route-returnurl="@ViewData["ReturnUrl"]">Register as a new user?</a>
+                        </p>
+                    }
                 </div>
             </form>
         </section>

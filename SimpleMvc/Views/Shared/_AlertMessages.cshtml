@@ -1,0 +1,39 @@
+﻿@using SimpleMvc.Common
+@using Newtonsoft.Json
+
+@{
+    var alerts = TempData.ContainsKey(AlertMessage.TempDataKey)
+        ? JsonConvert.DeserializeObject<List<AlertMessage>>(TempData[AlertMessage.TempDataKey].ToString())
+        : new List<AlertMessage>();
+
+    if (alerts.Any())
+    {
+        foreach (var alert in alerts)
+        {
+            string cssClass = "alert-info";
+            switch (alert.Type)
+            {
+                case AlertMessage.AlertType.Error:
+                    cssClass = "alert-danger";
+                    break;
+                case AlertMessage.AlertType.Info:
+                    cssClass = "alert-info";
+                    break;
+                case AlertMessage.AlertType.Warning:
+                    cssClass = "alert-warning";
+                    break;
+                case AlertMessage.AlertType.Success:
+                    cssClass = "alert-success";
+                    break;
+            }
+            cssClass += alert.Dismissable ? " alert-dismissable" : "";
+            <div class="alert @cssClass" role="alert">
+                @if (alert.Dismissable)
+                {
+                    <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                }
+                @alert.Message
+            </div>
+        }
+    }
+}

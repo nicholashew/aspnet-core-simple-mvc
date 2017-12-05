@@ -1,0 +1,112 @@
+﻿@using SimpleMvc.ViewModels.User
+
+@model UserEditViewModel
+
+@{
+    ViewData["Title"] = "Edit User";
+}
+
+<h2 class="page-header">@ViewData["Title"]</h2>
+
+<form class="form-horizontal" asp-action="Edit" method="post">
+    @await Html.PartialAsync("_AlertMessages")
+    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+    <input type="hidden" asp-for="Id" />
+    <input type="hidden" asp-for="UserName" />
+    <div class="form-group">
+        <label asp-for="UserName" class="control-label col-md-2"></label>
+        <div class="col-md-10">
+            <input asp-for="UserName" class="form-control" disabled />
+        </div>
+    </div>
+    <div class="form-group">
+        <label class="control-label col-md-2">Roles</label>
+        <div class="col-md-10">
+            <a class="btn btn-primary" asp-action="AssignRole" asp-route-id="@Model.Id">Assign Roles</a>
+            @{
+                List<string> roles = ViewBag.AssignedRoles;
+                if (roles.Any())
+                {
+                    <p style="margin-top:10px;">@string.Join(", ", roles)</p>
+                }
+            }
+        </div>
+    </div>
+    <div class="form-group">
+        <label asp-for="Email" class="control-label col-md-2"></label>
+        <div class="col-md-10">
+            <input asp-for="Email" class="form-control" />
+            <span asp-validation-for="Email" class="text-danger"></span>
+        </div>
+    </div>
+    <div class="form-group">
+        <label asp-for="FirstName" class="control-label col-md-2"></label>
+        <div class="col-md-10">
+            <input asp-for="FirstName" class="form-control" />
+            <span asp-validation-for="FirstName" class="text-danger"></span>
+        </div>
+    </div>
+    <div class="form-group">
+        <label asp-for="LastName" class="control-label col-md-2"></label>
+        <div class="col-md-10">
+            <input asp-for="LastName" class="form-control" />
+            <span asp-validation-for="LastName" class="text-danger"></span>
+        </div>
+    </div>
+    <div class="form-group">
+        <label asp-for="BirthDate" class="control-label col-md-2"></label>
+        <div class="col-md-10">
+            <input asp-for="BirthDate" class="form-control" />
+            <span asp-validation-for="BirthDate" class="text-danger"></span>
+        </div>
+    </div>
+    <div class="form-group">
+        <label asp-for="Address1" class="control-label col-md-2"></label>
+        <div class="col-md-10">
+            <input asp-for="Address1" class="form-control" />
+            <span asp-validation-for="Address1" class="text-danger"></span>
+        </div>
+    </div>
+    <div class="form-group">
+        <label asp-for="Address2" class="control-label col-md-2"></label>
+        <div class="col-md-10">
+            <input asp-for="Address2" class="form-control" />
+        </div>
+    </div>
+    <div class="form-group">
+        <label asp-for="State" cl class="control-label col-md-2"></label>
+        <div class="col-md-10">
+            <input asp-for="State" cl class="form-control" />
+        </div>
+    </div>
+    <div class="form-group">
+        <label asp-for="City" class="control-label col-md-2"></label>
+        <div class="col-md-10">
+            <input asp-for="City" class="form-control" />
+        </div>
+    </div>
+    <div class="form-group">
+        <label asp-for="PostalCode" class="control-label col-md-2"></label>
+        <div class="col-md-10">
+            <input asp-for="PostalCode" class="form-control" />
+        </div>
+    </div>
+    <div class="form-group">
+        <label asp-for="Country" class="control-label col-md-2"></label>
+        <div class="col-md-10">
+            <select asp-for="Country" asp-items="@ViewBag.CountryList" class="form-control">
+                <option>[Select a country]</option>
+            </select>
+        </div>
+    </div>
+    <div class="form-group">
+        <div class="col-md-10 col-md-offset-2">
+            <input type="submit" value="Save" class="btn btn-primary" />
+            <a class="btn btn-default" asp-action="Index">Back</a>
+        </div>
+    </div>
+</form>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+}

@@ -4,8 +4,11 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using SimpleMvc.Common;
+using SimpleMvc.Extensions;
 using SimpleMvc.Models;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace SimpleMvc.Data
@@ -15,20 +18,23 @@ namespace SimpleMvc.Data
         private ApplicationDbContext _ctx;
         private IHostingEnvironment _env;
         private IConfiguration _config;
-        private IServiceProvider _serviceProvider;
+        private UserManager<ApplicationUser> _userManager;
+        private RoleManager<ApplicationRole> _roleManager;
         private ILogger<DbInitializer> _logger;
 
         public DbInitializer(ApplicationDbContext ctx,
-          IConfiguration config,
-          IHostingEnvironment env,
-          IServiceProvider serviceProvider,
-          ILogger<DbInitializer> logger
-          )
+            IHostingEnvironment env,
+            IConfiguration config,
+            UserManager<ApplicationUser> userManager,
+            RoleManager<ApplicationRole> roleManager,
+            ILogger<DbInitializer> logger
+            )
         {
             _ctx = ctx;
             _env = env;
             _config = config;
-            _serviceProvider = serviceProvider;
+            _userManager = userManager;
+            _roleManager = roleManager;
             _logger = logger;
         }
 
@@ -43,78 +49,83 @@ namespace SimpleMvc.Data
                     _logger.LogInformation("Iterate Database successfully.");
                 }
 
-                using (var serviceScope = _serviceProvider.GetRequiredService<IServiceScopeFactory>().CreateScope())
+                // Create roles if not exists
+                var roles = new string[] { Constants.Roles.SuperAdministrator, Constants.Roles.Administrator, Constants.Roles.Editor };
+
+                foreach (var roleName in roles)
                 {
-                    // Get role manager service
-                    var _roleManager = serviceScope.ServiceProvider.GetService<RoleManager<ApplicationRole>>();
-
-                    // Create roles if not exists
-                    var roles = new string[] {
-                        Constants.Roles.SuperAdministrator,
-                        Constants.Roles.Administrator,
-                        Constants.Roles.Editor,
-                        Constants.Roles.User
-                    };
-
-                    foreach (var roleName in roles)
+                    if (!(await _roleManager.RoleExistsAsync(roleName)))
                     {
-                        if (!(await _roleManager.RoleExistsAsync(roleName)))
-                        {
-                            await _roleManager.CreateAsync(new ApplicationRole(roleName));
-                        }
-                    }
-
-                    if (_config["DbInitializer:SuperUser:EnsureCreated"].ToLower() == "true")
-                    {
-                        // Get user manager service
-                        var _userManager = serviceScope.ServiceProvider.GetService<UserManager<ApplicationUser>>();
-
-                        // Create the default Super User account
-                        string hostEmail = _config["DbInitializer:SuperUser:Email"];
-                        string hostPassword = _config["DbInitializer:SuperUser:TempPassword"];
-
-                        if (!string.IsNullOrWhiteSpace(hostEmail) && !string.IsNullOrWhiteSpace(hostPassword))
-                        {
-                            var admin = await _userManager.FindByEmailAsync(hostEmail);
-
-                            if (admin == null)
-                            {
-                                admin = new ApplicationUser
-                                {
-                                    UserName = hostEmail,
-                                    Email = hostEmail,
-                                    EmailConfirmed = true
-                                };
-
-                                // Create Super User
-                                var result = await _userManager.CreateAsync(admin, hostPassword);
-                                if (!result.Succeeded)
-                                {
-                                    string errors = "";
-                                    foreach (var error in result.Errors)
-                                    {
-                                        errors += error.Description;
-                                    }
-                                    _logger.LogCritical($"Failed to create Super User - {errors}");
-                                    throw new InvalidOperationException($"Failed to create Super User - {errors}");
-                                }
-                                else
-                                {
-                                    // Add to Super User Role
-                                    if (!(await _userManager.AddToRoleAsync(admin, Constants.Roles.SuperAdministrator)).Succeeded)
-                                    {
-                                        _logger.LogCritical("Failed to update Super User Role");
-                                        throw new InvalidOperationException("Failed to update Super User Role");
-                                    }
-                                }
-                            }
-                        }
+                        await _roleManager.CreateAsync(new ApplicationRole(roleName));
                     }
                 }
+
+                // Create the default Super User account
+                if (_config["DbInitializer:SuperUser:EnsureCreated"].ToLower() == "true")
+                {
+                    string email = _config["DbInitializer:SuperUser:Email"];
+                    string tempPassword = _config["DbInitializer:SuperUser:TempPassword"];
+                    await CreateUserAsync(email, tempPassword, true, Constants.Roles.SuperAdministrator);
+                }
+
+                // Create the default Admin User account
+                var adminUserSection = _config.GetSection("DbInitializer:AdminUser");
+                if (adminUserSection != null)
+                {
+                    foreach (IConfigurationSection section in adminUserSection.GetChildren())
+                    {
+                        var ensureCreated = section.GetValue<bool>("EnsureCreated");
+                        var email = section.GetValue<string>("Email");
+                        var tempPassword = section.GetValue<string>("TempPassword");
+                        if (ensureCreated)
+                        {
+                            await CreateUserAsync(email, tempPassword, true, Constants.Roles.Administrator);
+                        }
+                    }
+                }                
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "DbInitializer Initialize failed.");
+            }
+        }
+
+        private async Task CreateUserAsync(string email, string password, bool emailConfirmed, string role)
+        {
+            if (!string.IsNullOrWhiteSpace(email) && !string.IsNullOrWhiteSpace(password))
+            {
+                var user = await _userManager.FindByEmailAsync(email);
+
+                if (user == null)
+                {
+                    user = new ApplicationUser
+                    {
+                        UserName = email,
+                        Email = email,
+                        EmailConfirmed = emailConfirmed,
+                        CreatedDate = DateTime.UtcNow
+                    };
+
+                    var result = await _userManager.CreateAsync(user, password);
+                    if (!result.Succeeded)
+                    {
+                        string errors = "";
+                        foreach (var error in result.Errors)
+                        {
+                            errors += error.Description;
+                        }
+                        _logger.LogError($"Failed to create user {email}. {errors}");
+                        //throw new InvalidOperationException($"Failed to create user {email}. {errors}");
+                    }
+                    else
+                    {
+                        if (!(await _userManager.AddToRoleAsync(user, role)).Succeeded)
+                        {
+                            _logger.LogCritical($"Failed to add role {role} to user {email}");
+                            //throw new InvalidOperationException($"Failed to add role {role} to user {email}");
+                        }
+                    }
+                }
             }
         }
     }
